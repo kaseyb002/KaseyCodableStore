@@ -1,7 +1,10 @@
 import Foundation
 
+/// Stores, retrieves, and deletes a single Codable object
 public protocol CodableStore: Sendable {
-    func save<E: Encodable>(object: E) async throws
-    func retrieve<D: Decodable>(type: D.Type) async throws -> D
+    associatedtype CodableObject: Codable & Sendable
+
+    func save(object: CodableObject) async throws
+    func retrieve() async throws -> CodableObject
     func delete() async throws
 }

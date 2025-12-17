@@ -1,38 +1,69 @@
 import Foundation
 
-public final class JSONFileManagerCodableStore: CodableStore {
-    private let jsonEncoder: JSONEncoder = .init()
-    private let jsonDecoder: JSONDecoder = .init()
-    private let folderName: String
-    private let fileName: String
+public final actor JSONFileManagerCodableStore<Object: Codable & Sendable> {
+    public typealias CodableObject = Object
     
-    public func save<E: Encodable>(object: E) async throws {
-        guard let documentsDirectory: URL else {
-            throw JSONFileManagerCodableDataStoreError.documentsDirectoryNotFound
+    private let fileName: String
+    private let folderName: String
+    private let jsonEncoder: JSONEncoder
+    private let jsonDecoder: JSONDecoder
+    private let fileManager: FileManager
+
+    public init(
+        fileName: String,
+        folderName: String = "CodableObjects",
+        jsonEncoder: JSONEncoder = .init(),
+        jsonDecoder: JSONDecoder = .init(),
+        fileManager: FileManager = .default,
+    ) {
+        self.fileName = fileName
+        self.folderName = folderName
+        self.jsonEncoder = jsonEncoder
+        self.jsonDecoder = jsonDecoder
+        self.fileManager = fileManager
+    }
+}
+
+// MARK: - CodableStore
+extension JSONFileManagerCodableStore: CodableStore {
+    public func save(object: Object) async throws {
+        guard let folderURL: URL else {
+            throw JSONFileManagerCodableDataStoreError.failedToConstructFolderURL
         }
         
-        let folderURL: URL = documentsDirectory
-            .appendingPathComponent(folderName, isDirectory: true)
         try createFolderDirectoryIfNeeded(folderURL: folderURL)
-        let fileURL: URL = folderURL
-            .appending(component: fileName + ".json")
+        let fileURL: URL = try fileURL()
         
         let encodedData: Data = try jsonEncoder.encode(object)
         try encodedData.write(to: fileURL)
     }
     
-    public func retrieve<D: Decodable>(type: D.Type) async throws -> D {
+    public func retrieve() async throws -> Object {
         let data: Data = try Data(contentsOf: try fileURL())
-        let object: D = try jsonDecoder.decode(D.self, from: data)
-        return object
+        return try jsonDecoder.decode(Object.self, from: data)
     }
     
     public func delete() async throws {
-        try FileManager.default.removeItem(at: try fileURL())
+        try fileManager.removeItem(at: try fileURL())
     }
-    
+
+    private func createFolderDirectoryIfNeeded(folderURL: URL) throws {
+        guard fileManager.fileExists(atPath: folderURL.path) == false else {
+            return
+        }
+        
+        try fileManager.createDirectory(
+            atPath: folderURL.path,
+            withIntermediateDirectories: true,
+            attributes: nil
+        )
+    }
+}
+
+// MARK: - Derived URLs
+extension JSONFileManagerCodableStore {
     private var documentsDirectory: URL? {
-        FileManager.default.urls(
+        fileManager.urls(
             for: .documentDirectory,
             in: .userDomainMask
         ).first
@@ -52,29 +83,9 @@ public final class JSONFileManagerCodableStore: CodableStore {
             .appendingPathComponent(folderName, isDirectory: true)
             .appending(component: fileName + ".json")
     }
-    
-    public init(
-        folderName: String = "CodableObjects",
-        fileName: String
-    ) {
-        self.folderName = folderName
-        self.fileName = fileName
-    }
-    
-    private func createFolderDirectoryIfNeeded(folderURL: URL) throws {
-        let fm = FileManager.default
-        guard fm.fileExists(atPath: folderURL.path) == false else {
-            return
-        }
-        
-        try fm.createDirectory(
-            atPath: folderURL.path,
-            withIntermediateDirectories: true,
-            attributes: nil
-        )
-    }
 }
 
 private enum JSONFileManagerCodableDataStoreError: Error {
     case documentsDirectoryNotFound
+    case failedToConstructFolderURL
 }
