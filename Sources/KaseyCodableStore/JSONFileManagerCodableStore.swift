@@ -27,11 +27,7 @@ public final actor JSONFileManagerCodableStore<Object: Codable & Sendable> {
 // MARK: - CodableStore
 extension JSONFileManagerCodableStore: CodableStore {
     public func save(object: Object) async throws {
-        guard let folderURL: URL else {
-            throw JSONFileManagerCodableDataStoreError.failedToConstructFolderURL
-        }
-        
-        try createFolderDirectoryIfNeeded(folderURL: folderURL)
+        try createFolderDirectoryIfNeeded()
         let fileURL: URL = try fileURL()
         
         let encodedData: Data = try jsonEncoder.encode(object)
@@ -39,15 +35,19 @@ extension JSONFileManagerCodableStore: CodableStore {
     }
     
     public func retrieve() async throws -> Object {
-        let data: Data = try Data(contentsOf: try fileURL())
+        let data: Data = try Data(contentsOf: fileURL())
         return try jsonDecoder.decode(Object.self, from: data)
     }
     
     public func delete() async throws {
-        try fileManager.removeItem(at: try fileURL())
+        try fileManager.removeItem(at: fileURL())
     }
 
-    private func createFolderDirectoryIfNeeded(folderURL: URL) throws {
+    private func createFolderDirectoryIfNeeded() throws {
+        guard let folderURL: URL else {
+            throw JSONFileManagerCodableDataStoreError.failedToConstructFolderURL
+        }
+        
         guard fileManager.fileExists(atPath: folderURL.path) == false else {
             return
         }
